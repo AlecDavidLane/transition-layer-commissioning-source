@@ -1,0 +1,22 @@
+{
+  "name": "TL Commissioning Test Source",
+  "short_name": "TL Source",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080c0f",
+  "theme_color": "#080c0f",
+  "description": "Control interface for the Transition Layer commissioning test source",
+  "icons": [
+    {
+      "src": "/tl-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/tl-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

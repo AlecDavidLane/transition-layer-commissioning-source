@@ -1,0 +1,54 @@
+# Chromium kiosk showing the test output page on the HDMI display.
+# Runs in the graphical user session (Xorg, per §6). FR-06/FR-10: borderless
+# full screen, no cursor, no chrome; --autoplay-policy allows the audio
+# pattern without a user gesture.
+#
+# Installed as a *user* unit for the auto-logged-in kiosk user:
+#   /usr/lib/systemd/user/tl-commissioning-kiosk.service
+[Unit]
+Description=Transition Layer commissioning test source kiosk output
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+# Wait until the backend answers HTTP before starting the browser so the
+# page connects first try (FR-07 holding screen shows immediately after).
+# Note: /health reports 503 until this kiosk connects, so only reachability
+# is checked here, not health.
+# POSIX sh: no $SECONDS (a bashism that made this wait forever on dash).
+ExecStartPre=/bin/sh -c 'i=0; until curl -s -o /dev/null http://127.0.0.1:8808/health || [ "$i" -ge 45 ]; do i=$((i+1)); sleep 1; done; exit 0'
+# At boot the unit can win the race against the window manager, in which
+# case --kiosk silently degrades to a normal window. Wait for the shell,
+# then settle briefly before launching.
+ExecStartPre=/bin/sh -c 'i=0; until pgrep -x gnome-shell >/dev/null || [ "$i" -ge 30 ]; do i=$((i+1)); sleep 1; done; sleep 3'
+# Let the backend service (user tl-source) drive xrandr on this session's
+# X server for output-mode control (FR-11..14).
+ExecStartPre=-/usr/bin/xhost +SI:localuser:tl-source
+# A leftover browser holding the kiosk profile makes every new launch
+# forward a window to it and exit - systemd then restart-loops, opening
+# window after window. Kill any survivor before launching.
+ExecStartPre=-/usr/bin/pkill -f tl-kiosk-profile
+# A test source must never blank: disable X screensaver and DPMS for
+# this session (GNOME idle/lock is handled by the deployment's dconf).
+ExecStartPre=-/usr/bin/xset s off -dpms
+ExecStart=/usr/bin/chromium-browser \
+    --kiosk \
+    --start-fullscreen \
+    --no-first-run \
+    --noerrdialogs \
+    --disable-infobars \
+    --disable-session-crashed-bubble \
+    --disable-features=TranslateUI \
+    --autoplay-policy=no-user-gesture-required \
+    --check-for-update-interval=31536000 \
+    --user-data-dir=%h/tl-kiosk-profile \
+    --app=http://127.0.0.1:8808/kiosk/
+# Belt and braces for the boot race: whatever state the window mapped in,
+# force it fullscreen via the window manager once it exists.
+ExecStartPost=/bin/sh -c 'for i in $(seq 1 30); do sleep 1; wmctrl -r "TL Test Output" -b add,fullscreen && exit 0; done; exit 0'
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
